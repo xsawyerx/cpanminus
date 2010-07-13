@@ -85,7 +85,8 @@ sub parse_options {
         'look'      => sub { $self->{cmd} = 'look'; $self->{skip_installed} = 0 },
         'self-upgrade' => sub { $self->{cmd} = 'install'; $self->{skip_installed} = 1; push @ARGV, 'App::cpanminus' },
         'uninst-shadows!'  => \$self->{uninstall_shadows},
-        'lwp!'    => \$self->{try_lwp},
+        'lwp!'   => \$self->{try_lwp},
+        'clean!' => sub { $self->{action} = 'clean_home' },
     );
 
     $self->{argv} = \@ARGV;
@@ -153,6 +154,34 @@ sub setup_home {
     open my $out, ">$self->{log}" or die "$self->{log}: $!";
     print $out "cpanm (App::cpanminus) $VERSION on perl $] built for $Config{archname}\n";
     print $out "Work directory is $self->{base}\n";
+}
+
+sub clean_home {
+    my $self = shift;
+    my $home = $self->{'home'} || die "No home dir, can't do my thang\n";
+    my $log  = $self->{'log'}  || die "No log file, can't do my thang\n";
+
+    # no need to avoid latest-build target since it is automatically created
+    # when we run cpanm, even just for cleaning, so it's pointless
+
+    my $work_dir = File::Spec->catdir( $home, 'work' );
+
+    chdir $work_dir     or die "Can't chdir to $work_dir: $!\n";
+    opendir my $dh, '.' or die "Can't open working dir: $!\n";
+
+    my @folders = grep { -d $_ && $_ !~ /^\./ } readdir $dh;
+
+    closedir $dh or die "Can't close working dir: $!\n";
+
+    open my $out, '>>', $log or die "Can't open log '$log': $!\n";
+    print {$out} "Cleaning up home folder\n";
+    close $out or die "Can't close log '$log': $!\n";
+
+    foreach my $folder (@folders) {
+        File::Path::rmtree($folder);
+    }
+
+    return 1;
 }
 
 sub fetch_meta {
@@ -238,6 +267,7 @@ Commands:
   --self-upgrade            upgrades itself
   --info                    Displays distribution info on CPAN
   --look                    Opens the distribution with your SHELL
+  --clean                   Cleans up the working directory
   -V,--version              Displays software version
 
 Examples:
